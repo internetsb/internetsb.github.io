@@ -9,6 +9,7 @@ let githubData = null;
 let loadingScreen, terminalOutput, visitorCountElement, currentTimeElement;
 let repoCountElement, totalStarsElement, followersElement, contributionsElement;
 let activityGraph, focusTags, articlesContainer;
+let mobileNavContainer;
 
 // 在初始化时获取DOM元素
 function getDOMElements() {
@@ -23,6 +24,7 @@ function getDOMElements() {
     activityGraph = document.getElementById('activity-graph');
     focusTags = document.getElementById('focus-tags');
     articlesContainer = document.getElementById('articles-container');
+    mobileNavContainer = document.querySelector('.mobile-nav');
     
     // 检查关键元素是否存在
     if (!loadingScreen) {
@@ -95,6 +97,9 @@ function init() {
         
         // 加载模拟数据
         loadMockData();
+        
+        // 初始化移动端导航
+        initMobileNav();
         
         // 初始化3D场景
         init3DScene();
@@ -193,6 +198,51 @@ function loadMockData() {
     
     // 生成模拟活动图
     generateActivityGraph();
+}
+
+// 初始化移动端导航点击行为
+function initMobileNav() {
+    if (!mobileNavContainer) return;
+    
+    const items = mobileNavContainer.querySelectorAll('.mobile-nav-item');
+    items.forEach(item => {
+        item.addEventListener('click', () => {
+            const type = item.getAttribute('data-type');
+            const url = item.getAttribute('data-url');
+            const action = item.getAttribute('data-action');
+            const qq = item.getAttribute('data-qq');
+            
+            if (type === 'email' && action) {
+                window.location.href = action;
+                addTerminalLine('> 正在打开邮箱');
+                return;
+            }
+            
+            if (type === 'github' && url) {
+                window.open(url, '_blank');
+                addTerminalLine('> 正在打开 GitHub @internetsb');
+                return;
+            }
+            
+            if (type === 'qq' && qq) {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(qq).then(() => {
+                        addTerminalLine(`> QQ号已复制: ${qq}`);
+                    }).catch(() => {
+                        alert(`QQ: ${qq}`);
+                    });
+                } else {
+                    alert(`QQ: ${qq}`);
+                }
+                return;
+            }
+            
+            if (url) {
+                window.open(url, '_blank');
+                addTerminalLine(`> 正在打开链接: ${url}`);
+            }
+        });
+    });
 }
 
 // 渲染文章

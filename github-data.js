@@ -260,16 +260,13 @@ function updateGitHubStats(userData, reposData) {
     updateStarParticles(totalStars);
 }
 
-// 更新星星粒子
+// 更新星星粒子 / 背景粒子
 function updateStarParticles(starCount) {
-    // 在实际应用中，这里可以更新Three.js中的粒子数量
-    // 基于stars数调整粒子效果
+    // 直接把总 star 数传给 Three.js，由那边决定如何映射到粒子数量
     console.log(`更新星星粒子，总数: ${starCount}`);
     
-    // 模拟粒子更新效果
-    const particleCount = Math.min(Math.floor(starCount / 5), 200);
     if (window.updateStarParticlesCount) {
-        window.updateStarParticlesCount(particleCount);
+        window.updateStarParticlesCount(starCount);
     }
 }
 
@@ -536,7 +533,3 @@ function updateContributionGraph(data) {
 // 导出函数
 window.loadGitHubData = loadGitHubData;
 window.processGitHubData = processGitHubData;
-window.updateStarParticlesCount = (count) => {
-    console.log(`设置星星粒子数量: ${count}`);
-    // 这个函数需要在three-scene.js中实现
-};

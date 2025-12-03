@@ -4,12 +4,17 @@ let scene, camera, renderer;
 let planets = [];
 let particles = [];
 let particleSystem;
+let baseBackgroundParticleCount = 0;
+let currentBackgroundParticleCount = 0;
 let starParticles = [];
 let centralStar;
 let orbitControls;
 let hoveredPlanet = null;
 let planetMeshes = [];
+let planetLabelContainer = null;
 let planetTooltip;
+let aboutOverlay = null;
+let centralStarHovered = false;
 let interactionInitialized = false;
 const mouseVector = new THREE.Vector2();
 const globalRaycaster = new THREE.Raycaster();
@@ -54,7 +59,7 @@ function initThreeScene() {
     // 创建行星
     createPlanets();
     
-    // 创建粒子系统
+    // 创建粒子系统（初始为0，等待GitHub star数驱动）
     createParticleSystem();
     
     // 创建星点粒子
@@ -188,73 +193,85 @@ function createPlanets() {
         {
             name: "邮箱",
             label: "MAIL",
-            description: "发送邮件至 1473994304@qq.com",
+            description: "与我联系",
+            urlHint: "mailto:1473994304@qq.com",
             radius: 0.85,
             orbitRadius: 3.5,
             orbitSpeed: 0.0025,
             rotationSpeed: 0.012,
             color: 0x66ccff,
             type: "email",
+            category: "与我联系",
             action: "mailto:1473994304@qq.com"
         },
         {
             name: "GitHub",
-            label: "GH",
-            description: "访问 GitHub @internetsb",
+            label: "GITHUB",
+            description: "我的代码仓库",
+            urlHint: "https://github.com/internetsb",
             radius: 0.95,
             orbitRadius: 5,
             orbitSpeed: 0.002,
             rotationSpeed: 0.01,
             color: 0xffaa33,
             type: "github",
+            category: "GitHub",
             url: "https://github.com/internetsb"
         },
         {
-            name: "QQ 联系",
+            name: "QQ",
             label: "QQ",
-            description: "1523640161 / 3874540285",
+            description: "与我联系",
+            urlHint: "点击复制 QQ 号",
             radius: 1.05,
             orbitRadius: 6.2,
             orbitSpeed: 0.0018,
             rotationSpeed: 0.009,
             color: 0x88ffaa,
             type: "qq",
+            category: "与我联系",
             qqList: ["1523640161", "3874540285"]
         },
         {
             name: "神人语句",
             label: "SR",
             description: "神人语句网站",
+            urlHint: "http://8.148.85.152:80",
             radius: 0.9,
             orbitRadius: 7.5,
             orbitSpeed: 0.0016,
             rotationSpeed: 0.009,
             color: 0x66ffcc,
             type: "quotes",
+            category: "神人语句",
             url: "http://8.148.85.152:80"
         },
         {
             name: "我与…",
             label: "MY",
-            description: "我与...（情绪碎笔）",
+            description: "浮生碎笔",
+            urlHint: "http://8.148.85.152:9998",
             radius: 1.1,
             orbitRadius: 8.8,
             orbitSpeed: 0.0012,
             rotationSpeed: 0.007,
             color: 0xff77ff,
             type: "mood",
+            category: "我与...",
             url: "http://8.148.85.152:9998"
         },
         {
-            name: "图片分享",
+            name: "色图",
             label: "PIC",
-            description: "图片分享网站",
+            description: "色图分享网站",
+            urlHint: "http://8.148.85.152:9997",
             radius: 0.85,
             orbitRadius: 10,
             orbitSpeed: 0.001,
             rotationSpeed: 0.01,
             color: 0x77aaff,
             type: "gallery",
+            category: "色图分享",
             url: "http://8.148.85.152:9997"
         }
     ];
@@ -271,7 +288,8 @@ function createPlanets() {
             transparent: true,
             opacity: 0.95
         });
-        material.map = createPlanetTexture(config.label || config.name, config.color);
+        // 根据类型生成不同纹理：联系星球使用图标，其它星球用自定义纹理
+        material.map = createPlanetTexture(config, config.color);
         material.needsUpdate = true;
         
         // 创建网格
@@ -288,7 +306,7 @@ function createPlanets() {
         planetMeshes.push(planet);
         
         // 保存行星数据
-        planets.push({
+        const planetData = {
             mesh: planet,
             name: config.name,
             label: config.label || config.name,
@@ -297,15 +315,22 @@ function createPlanets() {
             url: config.url,
             action: config.action,
             qqList: config.qqList,
+            category: config.category,
+            urlHint: config.urlHint,
             radius: config.radius,
             orbitRadius: config.orbitRadius,
             orbitSpeed: config.orbitSpeed,
             rotationSpeed: config.rotationSpeed,
             angle: angle,
             color: config.color,
-            isHovered: false
-        });
+            isHovered: false,
+            labelElement: null
+        };
+        planets.push(planetData);
         planet.userData.planetIndex = planets.length - 1;
+        
+        // 创建对应的 2D 标签
+        createPlanetLabel(planetData);
         
         // 创建轨道线
         createOrbitLine(config.orbitRadius, config.color);
@@ -339,6 +364,40 @@ function createOrbitLine(radius, color) {
     scene.add(orbitLine);
 }
 
+function ensurePlanetLabelContainer() {
+    if (planetLabelContainer) return;
+    
+    planetLabelContainer = document.createElement('div');
+    planetLabelContainer.className = 'planet-label-container';
+    planetLabelContainer.style.position = 'fixed';
+    planetLabelContainer.style.left = '0';
+    planetLabelContainer.style.top = '0';
+    planetLabelContainer.style.width = '100%';
+    planetLabelContainer.style.height = '100%';
+    planetLabelContainer.style.pointerEvents = 'none';
+    planetLabelContainer.style.zIndex = '4';
+    
+    document.body.appendChild(planetLabelContainer);
+}
+
+function createPlanetLabel(planetData) {
+    ensurePlanetLabelContainer();
+    if (!planetLabelContainer) return;
+    
+    const label = document.createElement('div');
+    label.className = `planet-label planet-label-${planetData.type || 'default'}`;
+    label.innerHTML = `
+        <div class="planet-label-main">
+            <span class="planet-label-name">${planetData.label}</span>
+            ${planetData.category ? `<span class="planet-label-category">${planetData.category}</span>` : ''}
+        </div>
+        ${planetData.urlHint ? `<div class="planet-label-url">${planetData.urlHint}</div>` : ''}
+    `;
+    
+    planetLabelContainer.appendChild(label);
+    planetData.labelElement = label;
+}
+
 function setupPlanetInteraction() {
     if (interactionInitialized) return;
     interactionInitialized = true;
@@ -361,10 +420,40 @@ function setupPlanetInteraction() {
             }
         } else {
             clearHoveredPlanet();
+            
+            // 若未命中行星，检测中央恒星以提供点击提示
+            if (centralStar) {
+                const centerHits = globalRaycaster.intersectObject(centralStar);
+                if (centerHits.length > 0) {
+                    centralStarHovered = true;
+                    document.body.style.cursor = 'pointer';
+                } else {
+                    centralStarHovered = false;
+                    document.body.style.cursor = 'default';
+                }
+            }
         }
     });
     
-    window.addEventListener('click', () => {
+    window.addEventListener('click', (event) => {
+        if (!camera) return;
+        
+        // 如果 ABOUT 面板当前可见，则不触发行星/恒星点击（避免误跳转）
+        if (aboutOverlay && aboutOverlay.classList.contains('visible')) {
+            return;
+        }
+        
+        // 优先检测中央恒星点击（ABOUT ME）
+        if (centralStar) {
+            globalRaycaster.setFromCamera(mouseVector, camera);
+            const centerHits = globalRaycaster.intersectObject(centralStar);
+            if (centerHits.length > 0) {
+                showAboutOverlay();
+                return;
+            }
+        }
+        
+        // 其次处理行星点击
         if (!hoveredPlanet) return;
         handlePlanetClick(hoveredPlanet);
     });
@@ -397,7 +486,11 @@ function clearHoveredPlanet() {
     hoveredPlanet.mesh.scale.setScalar(1.0);
     hoveredPlanet.isHovered = false;
     hoveredPlanet = null;
-    document.body.style.cursor = 'default';
+    
+    // 不直接重置鼠标指针，让中央恒星 hover 逻辑来控制
+    if (!centralStarHovered) {
+        document.body.style.cursor = 'default';
+    }
     hidePlanetTooltip();
 }
 
@@ -457,7 +550,12 @@ function initPlanetTooltip() {
     planetTooltip.style.fontSize = '13px';
     planetTooltip.innerHTML = `
         <div class="tooltip-title"></div>
+        <div class="tooltip-meta">
+            <span class="tooltip-type"></span>
+            <span class="tooltip-url"></span>
+        </div>
         <div class="tooltip-desc"></div>
+        <div class="tooltip-hint">点击星球以导航 / 复制</div>
     `;
     
     document.body.appendChild(planetTooltip);
@@ -468,6 +566,8 @@ function showPlanetTooltip(planetData, event) {
     
     const titleEl = planetTooltip.querySelector('.tooltip-title');
     const descEl = planetTooltip.querySelector('.tooltip-desc');
+    const typeEl = planetTooltip.querySelector('.tooltip-type');
+    const urlEl = planetTooltip.querySelector('.tooltip-url');
     
     titleEl.textContent = planetData.name;
     titleEl.style.color = '#00ffcc';
@@ -478,6 +578,22 @@ function showPlanetTooltip(planetData, event) {
     descEl.style.color = '#e0f5ff';
     descEl.style.fontFamily = "'Roboto Mono', monospace";
     descEl.style.fontSize = '12px';
+    
+    if (typeEl) {
+        const typeText = planetData.category || ({
+            email: '邮箱',
+            github: 'GitHub',
+            qq: 'QQ',
+            quotes: '文案语录',
+            mood: '心情随笔',
+            gallery: '图片图库'
+        }[planetData.type] || '链接');
+        typeEl.textContent = typeText;
+    }
+    
+    if (urlEl) {
+        urlEl.textContent = planetData.urlHint || planetData.url || (planetData.type === 'qq' ? 'QQ 号复制' : '');
+    }
     
     updateTooltipPosition(event);
     planetTooltip.style.opacity = '1';
@@ -506,12 +622,15 @@ function updateTooltipPosition(event) {
     planetTooltip.style.top = `${top}px`;
 }
 
-function createPlanetTexture(label, baseColor) {
+function createPlanetTexture(config, baseColor) {
+    const label = config.label || config.name || '';
+    const type = config.type || 'default';
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext('2d');
     
+    // 通用底色渐变
     const gradient = ctx.createRadialGradient(
         size * 0.35, size * 0.35, size * 0.2,
         size * 0.5, size * 0.5, size * 0.5
@@ -530,34 +649,121 @@ function createPlanetTexture(label, baseColor) {
     ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
     ctx.fill();
     
-    ctx.strokeStyle = `rgba(255, 255, 255, 0.15)`;
+    // 外圈描边
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.18)`;
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, size / 2 - 6, 0, Math.PI * 2);
     ctx.stroke();
     
+    // 不同类型的“纹理 + 图标”区分
     ctx.save();
     ctx.translate(size / 2, size / 2);
-    ctx.rotate(-Math.PI / 6);
-    ctx.strokeStyle = `rgba(255, 255, 255, 0.1)`;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(0, 0, size / 2 - 30, Math.PI * 0.1, Math.PI * 0.9);
-    ctx.stroke();
+    
+    if (type === 'email') {
+        // 信封图标
+        const w = 120, h = 80;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 6;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.rect(-w / 2, -h / 2, w, h);
+        ctx.moveTo(-w / 2, -h / 2);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(w / 2, -h / 2);
+        ctx.stroke();
+    } else if (type === 'github') {
+        // 简化的 GitHub 章鱼猫轮廓
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.beginPath();
+        ctx.arc(0, -20, 55, Math.PI, 0);
+        ctx.lineTo(55, 20);
+        ctx.bezierCurveTo(25, 45, -25, 45, -55, 20);
+        ctx.closePath();
+        ctx.fill();
+        
+        // 眼睛
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.beginPath();
+        ctx.arc(-18, -5, 7, 0, Math.PI * 2);
+        ctx.arc(18, -5, 7, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.9)';
+        ctx.beginPath();
+        ctx.arc(-18, -5, 3, 0, Math.PI * 2);
+        ctx.arc(18, -5, 3, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (type === 'qq') {
+        // 企鹅轮廓
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.beginPath();
+        ctx.ellipse(0, 10, 45, 60, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 脸
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath();
+        ctx.arc(0, -10, 25, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 嘴
+        ctx.fillStyle = 'rgba(255,165,0,0.95)';
+        ctx.beginPath();
+        ctx.moveTo(-10, 0);
+        ctx.lineTo(0, 10);
+        ctx.lineTo(10, 0);
+        ctx.closePath();
+        ctx.fill();
+    } else {
+        // 其它星球：自定义抽象纹理
+        ctx.rotate(-Math.PI / 6);
+        ctx.strokeStyle = `rgba(255, 255, 255, 0.15)`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(0, 0, size / 2 - 30, Math.PI * 0.1, Math.PI * 0.9);
+        ctx.stroke();
+        
+        // 叠加几条弧线和网格，形成差异化质感
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 255, 255, 0.09)`;
+        for (let i = 0; i < 3; i++) {
+            const r = size / 2 - 50 - i * 18;
+            ctx.beginPath();
+            ctx.arc(0, 0, r, Math.PI * 0.2 * i, Math.PI * (1.2 + 0.2 * i));
+            ctx.stroke();
+        }
+        
+        ctx.rotate(Math.PI / 6);
+        ctx.strokeStyle = `rgba(255, 255, 255, 0.08)`;
+        for (let i = -2; i <= 2; i++) {
+            ctx.beginPath();
+            ctx.moveTo(-size / 2, i * 18);
+            ctx.lineTo(size / 2, i * 18);
+            ctx.stroke();
+        }
+    }
     ctx.restore();
     
+    // 中心文字（作为补充标签）
     ctx.font = 'bold 60px "Orbitron", sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label.substring(0, 4), size / 2, size / 2);
+    ctx.fillText(label.substring(0, 4), size / 2, size / 2 + 4);
     
     return new THREE.CanvasTexture(canvas);
 }
 
-function createParticleSystem() {
+function createParticleSystem(particleCountOverride) {
     // 创建粒子几何体
-    const particleCount = 5000;
+    const particleCount = particleCountOverride || currentBackgroundParticleCount || baseBackgroundParticleCount;
+    currentBackgroundParticleCount = particleCount;
+    
+    // 如果粒子数量为0，直接返回（等待GitHub star数驱动）
+    if (particleCount <= 0) {
+        return;
+    }
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
     
@@ -713,7 +919,15 @@ function animate() {
     // 更新中央恒星
     if (centralStar && centralStar.material.uniforms) {
         centralStar.material.uniforms.time.value = time;
-        centralStar.rotation.y += 0.005;
+        
+        // 悬停时停止自转并略微放大
+        if (centralStarHovered) {
+            centralStar.rotation.y += 0;
+            centralStar.scale.set(1.15, 1.15, 1.15);
+        } else {
+            centralStar.rotation.y += 0.005;
+            centralStar.scale.set(1, 1, 1);
+        }
     }
     
     // 更新行星
@@ -732,6 +946,22 @@ function animate() {
             
             // 轻微上下浮动
             planet.mesh.position.y = Math.sin(time + planet.angle) * 0.3;
+        }
+        
+        // 更新 2D 标签位置（提高可辨识度）
+        if (planet.mesh && planet.labelElement) {
+            const vector = planet.mesh.position.clone();
+            vector.project(camera);
+            
+            if (vector.z < 1) {
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                
+                planet.labelElement.style.transform = `translate3d(${x}px, ${y - 18}px, 0)`;
+                planet.labelElement.style.opacity = planet.isHovered ? '1' : '0.6';
+            } else {
+                planet.labelElement.style.opacity = '0';
+            }
         }
     });
     
@@ -776,36 +1006,91 @@ function updateThemeColors(theme) {
         centralStar.material.uniforms.primaryColor.value = color;
     }
     
-    // 更新行星颜色
-    planets.forEach(planet => {
-        if (planet.mesh && planet.mesh.material) {
-            switch (theme) {
-                case 'matrix':
-                    if (planet.type === 'blog') planet.mesh.material.color.setHex(0x00aaff);
-                    else if (planet.type === 'projects') planet.mesh.material.color.setHex(0xffaa00);
-                    else if (planet.type === 'resume') planet.mesh.material.color.setHex(0xff00ff);
-                    else planet.mesh.material.color.setHex(0x00ffaa);
-                    break;
-                case 'neon':
-                    planet.mesh.material.color.setHex(0xff00ff);
-                    break;
-                case 'solar':
-                    planet.mesh.material.color.setHex(0xffaa00);
-                    break;
-                case 'arctic':
-                    planet.mesh.material.color.setHex(0x00ffff);
-                    break;
-            }
-        }
-    });
-    
-    // 重新创建粒子系统以匹配新主题
+    // 保持行星自身颜色 / 纹理不变，仅通过 CSS 主题与中央恒星颜色体现主题变化
+
+    // 重新创建粒子系统以匹配新主题（保持当前粒子数量）
     if (particleSystem) {
         scene.remove(particleSystem);
-        createParticleSystem();
+        createParticleSystem(currentBackgroundParticleCount);
+    }
+}
+
+// 根据 GitHub star 数更新背景粒子数量
+function updateBackgroundParticlesFromStars(totalStars) {
+    // 根据 star 数映射到粒子数量，控制在一个合理范围内
+    // 从 0 开始，根据已有 star 基数逐步增加
+    const minParticles = 0;
+    const maxParticles = 10000;
+    
+    let target = minParticles;
+    if (totalStars && totalStars > 0) {
+        // 非线性放大，少量 star 也有明显变化
+        target = minParticles + Math.floor(Math.pow(totalStars, 0.85) * 40);
+    }
+    target = Math.max(minParticles, Math.min(maxParticles, target));
+    
+    console.log(`根据 GitHub stars(${totalStars}) 设置背景粒子数: ${target}`);
+    if (window.addTerminalLine) {
+        window.addTerminalLine(`> 根据 GitHub stars 调整背景粒子: ${target}`);
+    }
+    
+    if (particleSystem && scene) {
+        scene.remove(particleSystem);
+        particleSystem = null;
+    }
+    createParticleSystem(target);
+}
+
+function createAboutOverlay() {
+    if (aboutOverlay) return;
+    
+    aboutOverlay = document.createElement('div');
+    aboutOverlay.className = 'about-overlay';
+    aboutOverlay.innerHTML = `
+        <div class="about-panel">
+            <button class="about-close" type="button">×</button>
+            <div class="about-title">ABOUT ME</div>
+            <div class="about-body">
+                <p>Hi, 我是<span class="about-highlight">internetsb</span>。</p>
+                <p>不正经的CSer,AI编程重度依赖者</p>
+                <p>这个星系里的不同星球，都是我的小网站和联系方式。背景的星空代表我的star数</p>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(aboutOverlay);
+    
+    const closeBtn = aboutOverlay.querySelector('.about-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            hideAboutOverlay();
+        });
+    }
+    
+    // 点击遮罩空白处关闭
+    aboutOverlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (e.target === aboutOverlay) {
+            hideAboutOverlay();
+        }
+    });
+}
+
+function showAboutOverlay() {
+    createAboutOverlay();
+    if (aboutOverlay) {
+        aboutOverlay.classList.add('visible');
+    }
+}
+
+function hideAboutOverlay() {
+    if (aboutOverlay) {
+        aboutOverlay.classList.remove('visible');
     }
 }
 
 // 导出到全局作用域
 window.initThreeScene = initThreeScene;
 window.updateThemeColors = updateThemeColors;
+window.updateStarParticlesCount = updateBackgroundParticlesFromStars;
