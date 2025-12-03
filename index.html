@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INTERNETSB</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+</head>
+<body class="matrix-theme">
+    <!-- 加载动画 -->
+    <div id="loading-screen">
+        <div class="loading-content">
+            <div class="loading-spinner">
+                <div class="ring"></div>
+                <div class="ring"></div>
+                <div class="ring"></div>
+            </div>
+            <div class="loading-text">
+                <span class="loading-char">I</span>
+                <span class="loading-char">N</span>
+                <span class="loading-char">I</span>
+                <span class="loading-char">T</span>
+                <span class="loading-char">I</span>
+                <span class="loading-char">A</span>
+                <span class="loading-char">L</span>
+                <span class="loading-char">I</span>
+                <span class="loading-char">Z</span>
+                <span class="loading-char">I</span>
+                <span class="loading-char">N</span>
+                <span class="loading-char">G</span>
+                <span class="loading-char">.</span>
+                <span class="loading-char">.</span>
+                <span class="loading-char">.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主3D容器 -->
+    <div id="scene-container"></div>
+
+    <!-- 左侧状态面板 -->
+    <div class="panel left-panel">
+        <div class="panel-header">
+            <i class="fas fa-server"></i>
+            <h3>SYSTEM STATUS</h3>
+            <div class="status-indicator active"></div>
+        </div>
+        
+        <div class="panel-section">
+            <h4><i class="fas fa-code-branch"></i> GITHUB ACTIVITY</h4>
+            <div class="activity-graph" id="activity-graph">
+                <!-- 通过JS动态生成 -->
+            </div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">REPOSITORIES</div>
+                    <div class="stat-value" id="repo-count">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">TOTAL STARS</div>
+                    <div class="stat-value" id="total-stars">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">FOLLOWERS</div>
+                    <div class="stat-value" id="followers">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">CONTRIBUTIONS</div>
+                    <div class="stat-value" id="contributions">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <h4><i class="fas fa-laptop-code"></i> CURRENT FOCUS</h4>
+            <div class="focus-tags" id="focus-tags">
+                <!-- 通过JS动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧文章面板 -->
+    <div class="panel right-panel">
+        <div class="panel-header">
+            <i class="fas fa-newspaper"></i>
+            <h3>TECH ARTICLES</h3>
+            <div class="pulse-indicator"></div>
+        </div>
+        
+        <div class="articles-container" id="articles-container">
+            <!-- 通过JS动态生成 -->
+        </div>
+    </div>
+
+    <!-- 底部控制台 -->
+    <div class="console-bar">
+        <div class="console-left">
+            <div class="terminal-output" id="terminal-output">
+                <div class="terminal-line">> 系统初始化完成</div>
+                <div class="terminal-line">> 加载全息控制台界面</div>
+                <div class="terminal-line">> 正在获取GitHub数据...</div>
+            </div>
+            <div class="terminal-input">
+                <span class="prompt">></span>
+                <span class="cursor">█</span>
+            </div>
+        </div>
+        <div class="console-right">
+            <div class="visitor-counter">
+                <i class="fas fa-globe-americas"></i>
+                <span>VISITORS TODAY: <span id="visitor-count">0</span></span>
+            </div>
+            <div class="time-display">
+                <span id="current-time">00:00:00</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主题切换器 -->
+    <div class="theme-switcher">
+        <div class="theme-title">THEME</div>
+        <div class="theme-options">
+            <div class="theme-option active" data-theme="matrix" title="矩阵主题">
+                <div class="theme-preview matrix"></div>
+                <span>01</span>
+            </div>
+            <div class="theme-option" data-theme="neon" title="霓虹之夜">
+                <div class="theme-preview neon"></div>
+                <span>02</span>
+            </div>
+            <div class="theme-option" data-theme="solar" title="太阳能">
+                <div class="theme-preview solar"></div>
+                <span>03</span>
+            </div>
+            <div class="theme-option" data-theme="arctic" title="极地冰川">
+                <div class="theme-preview arctic"></div>
+                <span>04</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 中央标题 -->
+    <div class="center-title">
+        <h1 class="main-title">INTERNETSB<br/>CONSOLE</h1>
+        <div class="subtitle">index</div>
+    </div>
+
+    <!-- JavaScript文件 -->
+    <script src="particles.js"></script>
+    <script src="three-scene.js"></script>
+    <script src="github-data.js"></script>
+    <script src="theme-switcher.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
