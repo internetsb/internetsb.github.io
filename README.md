@@ -1,3 +1,3 @@
 效果：
 
-![show](.github\images\show.png)
+![show](/.github/images/show.png)
