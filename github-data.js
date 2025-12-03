@@ -2,6 +2,7 @@
 
 // GitHub API配置
 const GITHUB_USERNAME = 'internetsb'; // 请替换为你的GitHub用户名
+// 如果用户名无效，请使用模拟数据
 const GITHUB_API_URL = `https://api.github.com/users/${GITHUB_USERNAME}`;
 const GITHUB_REPOS_URL = `https://api.github.com/users/${GITHUB_USERNAME}/repos`;
 
@@ -25,11 +26,18 @@ async function fetchGitHubUserData() {
 
         console.log('从GitHub API获取用户数据');
         
+        // 添加超时机制
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+        
         const response = await fetch(GITHUB_API_URL, {
             headers: {
                 'Accept': 'application/vnd.github.v3+json'
-            }
+            },
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
             throw new Error(`GitHub API错误: ${response.status}`);
@@ -73,11 +81,18 @@ async function fetchGitHubReposData() {
         
         // GitHub API分页获取所有仓库
         while (hasMore) {
+            // 添加超时机制
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+            
             const response = await fetch(`${GITHUB_REPOS_URL}?per_page=100&page=${page}&sort=updated`, {
                 headers: {
                     'Accept': 'application/vnd.github.v3+json'
-                }
+                },
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
             
             if (!response.ok) {
                 throw new Error(`GitHub API错误: ${response.status}`);
@@ -454,14 +469,34 @@ async function loadGitHubData() {
         window.addTerminalLine('> 正在从GitHub获取数据...');
     }
     
-    // 处理GitHub数据
-    const githubData = await processGitHubData();
-    
-    // 生成贡献活动图
-    const contributionData = getContributionData();
-    updateContributionGraph(contributionData);
-    
-    return githubData;
+    try {
+        // 处理GitHub数据
+        const githubData = await processGitHubData();
+        
+        // 生成贡献活动图
+        const contributionData = getContributionData();
+        updateContributionGraph(contributionData);
+        
+        return githubData;
+    } catch (error) {
+        console.error('加载GitHub数据失败:', error);
+        if (window.addTerminalLine) {
+            window.addTerminalLine('> GitHub数据加载失败，使用模拟数据');
+        }
+        
+        // 使用模拟数据更新UI
+        const userData = getMockGitHubData();
+        const reposData = getMockReposData();
+        updateGitHubStats(userData, reposData);
+        updateTopRepositories(reposData);
+        updateLanguageStats(reposData);
+        
+        // 生成贡献活动图
+        const contributionData = getContributionData();
+        updateContributionGraph(contributionData);
+        
+        return { userData, reposData };
+    }
 }
 
 // 更新贡献活动图

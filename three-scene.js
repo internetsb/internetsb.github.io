@@ -7,6 +7,12 @@ let particleSystem;
 let starParticles = [];
 let centralStar;
 let orbitControls;
+let hoveredPlanet = null;
+let planetMeshes = [];
+let planetTooltip;
+let interactionInitialized = false;
+const mouseVector = new THREE.Vector2();
+const globalRaycaster = new THREE.Raycaster();
 
 function initThreeScene() {
     // 获取容器
@@ -177,64 +183,96 @@ function createStarRing() {
 }
 
 function createPlanets() {
-    // 行星配置
+    // 行星配置（包含联系方式与导航内容）
     const planetConfigs = [
         {
-            name: "博客",
-            radius: 0.8,
-            orbitRadius: 4,
-            orbitSpeed: 0.002,
-            rotationSpeed: 0.01,
-            color: 0x00aaff,
-            type: "blog"
+            name: "邮箱",
+            label: "MAIL",
+            description: "发送邮件至 1473994304@qq.com",
+            radius: 0.85,
+            orbitRadius: 3.5,
+            orbitSpeed: 0.0025,
+            rotationSpeed: 0.012,
+            color: 0x66ccff,
+            type: "email",
+            action: "mailto:1473994304@qq.com"
         },
         {
-            name: "项目",
-            radius: 1.0,
-            orbitRadius: 6,
-            orbitSpeed: 0.0015,
-            rotationSpeed: 0.008,
-            color: 0xffaa00,
-            type: "projects"
-        },
-        {
-            name: "简历",
-            radius: 0.7,
-            orbitRadius: 3,
-            orbitSpeed: 0.003,
-            rotationSpeed: 0.015,
-            color: 0xff00ff,
-            type: "resume"
-        },
-        {
-            name: "实验",
-            radius: 0.6,
+            name: "GitHub",
+            label: "GH",
+            description: "访问 GitHub @internetsb",
+            radius: 0.95,
             orbitRadius: 5,
             orbitSpeed: 0.002,
-            rotationSpeed: 0.012,
-            color: 0x00ffaa,
-            type: "lab"
+            rotationSpeed: 0.01,
+            color: 0xffaa33,
+            type: "github",
+            url: "https://github.com/internetsb"
+        },
+        {
+            name: "QQ 联系",
+            label: "QQ",
+            description: "1523640161 / 3874540285",
+            radius: 1.05,
+            orbitRadius: 6.2,
+            orbitSpeed: 0.0018,
+            rotationSpeed: 0.009,
+            color: 0x88ffaa,
+            type: "qq",
+            qqList: ["1523640161", "3874540285"]
+        },
+        {
+            name: "神人语句",
+            label: "SR",
+            description: "神人语句网站",
+            radius: 0.9,
+            orbitRadius: 7.5,
+            orbitSpeed: 0.0016,
+            rotationSpeed: 0.009,
+            color: 0x66ffcc,
+            type: "quotes",
+            url: "http://8.148.85.152:80"
+        },
+        {
+            name: "我与…",
+            label: "MY",
+            description: "我与...（情绪碎笔）",
+            radius: 1.1,
+            orbitRadius: 8.8,
+            orbitSpeed: 0.0012,
+            rotationSpeed: 0.007,
+            color: 0xff77ff,
+            type: "mood",
+            url: "http://8.148.85.152:9998"
+        },
+        {
+            name: "图片分享",
+            label: "PIC",
+            description: "图片分享网站",
+            radius: 0.85,
+            orbitRadius: 10,
+            orbitSpeed: 0.001,
+            rotationSpeed: 0.01,
+            color: 0x77aaff,
+            type: "gallery",
+            url: "http://8.148.85.152:9997"
         }
     ];
     
     planetConfigs.forEach((config, index) => {
         // 创建行星几何体
         let geometry;
-        if (config.type === "blog") {
-            geometry = new THREE.OctahedronGeometry(config.radius, 2);
-        } else if (config.type === "projects") {
-            geometry = new THREE.DodecahedronGeometry(config.radius, 1);
-        } else {
-            geometry = new THREE.IcosahedronGeometry(config.radius, 1);
-        }
+        geometry = new THREE.IcosahedronGeometry(config.radius, 2);
         
         // 创建材质
         const material = new THREE.MeshPhongMaterial({
             color: config.color,
             shininess: 100,
             transparent: true,
-            opacity: 0.9
+            opacity: 0.95
         });
+        material.map = createPlanetTexture(config.label || config.name, config.color);
+        material.needsUpdate = true;
         
         // 创建网格
         const planet = new THREE.Mesh(geometry, material);
@@ -247,26 +285,34 @@ function createPlanets() {
         
         // 添加到场景
         scene.add(planet);
+        planetMeshes.push(planet);
         
         // 保存行星数据
         planets.push({
             mesh: planet,
             name: config.name,
+            label: config.label || config.name,
+            description: config.description,
             type: config.type,
+            url: config.url,
+            action: config.action,
+            qqList: config.qqList,
             radius: config.radius,
             orbitRadius: config.orbitRadius,
             orbitSpeed: config.orbitSpeed,
             rotationSpeed: config.rotationSpeed,
             angle: angle,
-            color: config.color
+            color: config.color,
+            isHovered: false
         });
+        planet.userData.planetIndex = planets.length - 1;
         
         // 创建轨道线
         createOrbitLine(config.orbitRadius, config.color);
-        
-        // 为行星添加点击事件
-        addPlanetInteraction(planet, config);
     });
+    
+    initPlanetTooltip();
+    setupPlanetInteraction();
 }
 
 function createOrbitLine(radius, color) {
@@ -293,61 +339,220 @@ function createOrbitLine(radius, color) {
     scene.add(orbitLine);
 }
 
-function addPlanetInteraction(planet, config) {
-    // 创建射线检测器
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
+function setupPlanetInteraction() {
+    if (interactionInitialized) return;
+    interactionInitialized = true;
     
-    // 鼠标移动事件
     window.addEventListener('mousemove', (event) => {
-        // 计算标准化设备坐标
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        mouseVector.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouseVector.y = -(event.clientY / window.innerHeight) * 2 + 1;
         
-        // 更新射线
-        raycaster.setFromCamera(mouse, camera);
+        if (!camera || planetMeshes.length === 0) return;
         
-        // 计算与行星的交点
-        const intersects = raycaster.intersectObject(planet);
+        globalRaycaster.setFromCamera(mouseVector, camera);
+        const intersects = globalRaycaster.intersectObjects(planetMeshes);
         
         if (intersects.length > 0) {
-            // 悬停效果
-            planet.material.emissive = new THREE.Color(config.color);
-            planet.material.emissiveIntensity = 0.5;
-            planet.scale.setScalar(1.1);
-            
-            // 显示行星名称（在实际应用中，可以显示一个标签）
-            document.body.style.cursor = 'pointer';
+            const intersected = intersects[0].object;
+            const planetIndex = intersected.userData.planetIndex;
+            const planetData = planets[planetIndex];
+            if (planetData) {
+                setHoveredPlanet(planetData, event);
+            }
         } else {
-            // 恢复默认
-            planet.material.emissive = new THREE.Color(0x000000);
-            planet.material.emissiveIntensity = 0;
-            planet.scale.setScalar(1.0);
-            document.body.style.cursor = 'default';
+            clearHoveredPlanet();
         }
     });
     
-    // 点击事件
     window.addEventListener('click', () => {
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObject(planet);
-        
-        if (intersects.length > 0) {
-            // 添加终端消息
-            if (window.addTerminalLine) {
-                window.addTerminalLine(`> 正在导航到: ${config.name}`);
-            }
-            
-            // 在实际应用中，这里应该导航到相应的页面
-            // 例如：window.open(config.url, '_blank');
-            
-            // 添加点击效果
-            planet.material.emissiveIntensity = 1.0;
-            setTimeout(() => {
-                planet.material.emissiveIntensity = 0;
-            }, 300);
-        }
+        if (!hoveredPlanet) return;
+        handlePlanetClick(hoveredPlanet);
     });
+}
+
+function setHoveredPlanet(planetData, event) {
+    if (hoveredPlanet && hoveredPlanet.mesh === planetData.mesh) {
+        updateTooltipPosition(event);
+        return;
+    }
+    
+    clearHoveredPlanet();
+    
+    hoveredPlanet = planetData;
+    hoveredPlanet.isHovered = true;
+    
+    hoveredPlanet.mesh.material.emissive = new THREE.Color(planetData.color);
+    hoveredPlanet.mesh.material.emissiveIntensity = 0.6;
+    hoveredPlanet.mesh.scale.setScalar(1.3);
+    document.body.style.cursor = 'pointer';
+    
+    showPlanetTooltip(planetData, event);
+}
+
+function clearHoveredPlanet() {
+    if (!hoveredPlanet) return;
+    
+    hoveredPlanet.mesh.material.emissive = new THREE.Color(0x000000);
+    hoveredPlanet.mesh.material.emissiveIntensity = 0;
+    hoveredPlanet.mesh.scale.setScalar(1.0);
+    hoveredPlanet.isHovered = false;
+    hoveredPlanet = null;
+    document.body.style.cursor = 'default';
+    hidePlanetTooltip();
+}
+
+function handlePlanetClick(planetData) {
+    if (window.addTerminalLine) {
+        window.addTerminalLine(`> 正在导航到: ${planetData.name}`);
+    }
+    
+    if (planetData.type === 'email' && planetData.action) {
+        window.location.href = planetData.action;
+        return;
+    }
+    
+    if (planetData.type === 'github' && planetData.url) {
+        window.open(planetData.url, '_blank');
+        return;
+    }
+    
+    if (planetData.type === 'qq' && planetData.qqList) {
+        const qqString = planetData.qqList.join(' / ');
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(qqString).then(() => {
+                if (window.addTerminalLine) {
+                    window.addTerminalLine(`> QQ号已复制: ${qqString}`);
+                }
+            }).catch(() => {
+                alert(`QQ: ${qqString}`);
+            });
+        } else {
+            alert(`QQ: ${qqString}`);
+        }
+        return;
+    }
+    
+    if (planetData.url) {
+        window.open(planetData.url, '_blank');
+    }
+}
+
+function initPlanetTooltip() {
+    if (planetTooltip) return;
+    
+    planetTooltip = document.createElement('div');
+    planetTooltip.className = 'planet-tooltip';
+    planetTooltip.style.position = 'fixed';
+    planetTooltip.style.minWidth = '180px';
+    planetTooltip.style.padding = '10px 14px';
+    planetTooltip.style.borderRadius = '10px';
+    planetTooltip.style.border = '1px solid rgba(255,255,255,0.15)';
+    planetTooltip.style.background = 'rgba(10, 20, 20, 0.8)';
+    planetTooltip.style.backdropFilter = 'blur(8px)';
+    planetTooltip.style.boxShadow = '0 10px 25px rgba(0,0,0,0.35)';
+    planetTooltip.style.pointerEvents = 'none';
+    planetTooltip.style.opacity = '0';
+    planetTooltip.style.transition = 'opacity 0.2s ease';
+    planetTooltip.style.fontFamily = "'Orbitron', sans-serif";
+    planetTooltip.style.fontSize = '13px';
+    planetTooltip.innerHTML = `
+        <div class="tooltip-title"></div>
+        <div class="tooltip-desc"></div>
+    `;
+    
+    document.body.appendChild(planetTooltip);
+}
+
+function showPlanetTooltip(planetData, event) {
+    if (!planetTooltip) return;
+    
+    const titleEl = planetTooltip.querySelector('.tooltip-title');
+    const descEl = planetTooltip.querySelector('.tooltip-desc');
+    
+    titleEl.textContent = planetData.name;
+    titleEl.style.color = '#00ffcc';
+    titleEl.style.fontSize = '14px';
+    titleEl.style.marginBottom = '4px';
+    
+    descEl.textContent = planetData.description || '';
+    descEl.style.color = '#e0f5ff';
+    descEl.style.fontFamily = "'Roboto Mono', monospace";
+    descEl.style.fontSize = '12px';
+    
+    updateTooltipPosition(event);
+    planetTooltip.style.opacity = '1';
+}
+
+function hidePlanetTooltip() {
+    if (!planetTooltip) return;
+    planetTooltip.style.opacity = '0';
+}
+
+function updateTooltipPosition(event) {
+    if (!planetTooltip || !event) return;
+    const offset = 20;
+    let left = event.clientX + offset;
+    let top = event.clientY + offset;
+    
+    const tooltipRect = planetTooltip.getBoundingClientRect();
+    if (left + tooltipRect.width > window.innerWidth) {
+        left = event.clientX - tooltipRect.width - offset;
+    }
+    if (top + tooltipRect.height > window.innerHeight) {
+        top = event.clientY - tooltipRect.height - offset;
+    }
+    
+    planetTooltip.style.left = `${left}px`;
+    planetTooltip.style.top = `${top}px`;
+}
+
+function createPlanetTexture(label, baseColor) {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    
+    const gradient = ctx.createRadialGradient(
+        size * 0.35, size * 0.35, size * 0.2,
+        size * 0.5, size * 0.5, size * 0.5
+    );
+    
+    const color = new THREE.Color(baseColor);
+    const lighter = color.clone().offsetHSL(0, 0, 0.2);
+    const darker = color.clone().offsetHSL(0, 0, -0.2);
+    
+    gradient.addColorStop(0, `rgba(${lighter.r * 255}, ${lighter.g * 255}, ${lighter.b * 255}, 0.95)`);
+    gradient.addColorStop(0.7, `rgba(${color.r * 255}, ${color.g * 255}, ${color.b * 255}, 0.85)`);
+    gradient.addColorStop(1, `rgba(${darker.r * 255}, ${darker.g * 255}, ${darker.b * 255}, 0.8)`);
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.15)`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 6, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    ctx.save();
+    ctx.translate(size / 2, size / 2);
+    ctx.rotate(-Math.PI / 6);
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.1)`;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(0, 0, size / 2 - 30, Math.PI * 0.1, Math.PI * 0.9);
+    ctx.stroke();
+    ctx.restore();
+    
+    ctx.font = 'bold 60px "Orbitron", sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label.substring(0, 4), size / 2, size / 2);
+    
+    return new THREE.CanvasTexture(canvas);
 }
 
 function createParticleSystem() {
@@ -514,8 +719,10 @@ function animate() {
     // 更新行星
     planets.forEach(planet => {
         if (planet.mesh) {
-            // 轨道运动
-            planet.angle += planet.orbitSpeed;
+            // 轨道运动（悬停时暂停）
+            if (!planet.isHovered) {
+                planet.angle += planet.orbitSpeed;
+            }
             planet.mesh.position.x = Math.cos(planet.angle) * planet.orbitRadius;
             planet.mesh.position.z = Math.sin(planet.angle) * planet.orbitRadius;
             

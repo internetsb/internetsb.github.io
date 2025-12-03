@@ -306,9 +306,9 @@ window.getCurrentTheme = getCurrentTheme;
 window.rotateTheme = rotateTheme;
 window.randomTheme = randomTheme;
 
-// 自动初始化
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initThemeSwitching);
-} else {
-    initThemeSwitching();
-}
+// 注意：在script.js中手动调用initThemeSwitching，避免DOMContentLoaded事件冲突
+// if (document.readyState === 'loading') {
+//     document.addEventListener('DOMContentLoaded', initThemeSwitching);
+// } else {
+//     initThemeSwitching();
+// }

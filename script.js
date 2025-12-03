@@ -1,22 +1,37 @@
 // 主脚本文件 - 初始化应用程序
 
 // 全局变量
-let currentTheme = 'matrix';
+// 主题状态由 theme-switcher.js 统一管理，这里不再重复声明 currentTheme 以避免全局冲突
 let visitorCount = 0;
 let githubData = null;
 
 // DOM元素
-const loadingScreen = document.getElementById('loading-screen');
-const terminalOutput = document.getElementById('terminal-output');
-const visitorCountElement = document.getElementById('visitor-count');
-const currentTimeElement = document.getElementById('current-time');
-const repoCountElement = document.getElementById('repo-count');
-const totalStarsElement = document.getElementById('total-stars');
-const followersElement = document.getElementById('followers');
-const contributionsElement = document.getElementById('contributions');
-const activityGraph = document.getElementById('activity-graph');
-const focusTags = document.getElementById('focus-tags');
-const articlesContainer = document.getElementById('articles-container');
+let loadingScreen, terminalOutput, visitorCountElement, currentTimeElement;
+let repoCountElement, totalStarsElement, followersElement, contributionsElement;
+let activityGraph, focusTags, articlesContainer;
+
+// 在初始化时获取DOM元素
+function getDOMElements() {
+    loadingScreen = document.getElementById('loading-screen');
+    terminalOutput = document.getElementById('terminal-output');
+    visitorCountElement = document.getElementById('visitor-count');
+    currentTimeElement = document.getElementById('current-time');
+    repoCountElement = document.getElementById('repo-count');
+    totalStarsElement = document.getElementById('total-stars');
+    followersElement = document.getElementById('followers');
+    contributionsElement = document.getElementById('contributions');
+    activityGraph = document.getElementById('activity-graph');
+    focusTags = document.getElementById('focus-tags');
+    articlesContainer = document.getElementById('articles-container');
+    
+    // 检查关键元素是否存在
+    if (!loadingScreen) {
+        console.error('关键元素 #loading-screen 未找到');
+    }
+    if (!terminalOutput) {
+        console.error('关键元素 #terminal-output 未找到');
+    }
+}
 
 // 模拟数据 - 在实际应用中应该从API获取
 const mockArticles = [
@@ -64,37 +79,45 @@ const mockFocusTags = [
 
 // 初始化函数
 function init() {
-    // 设置RGB颜色变量
-    setThemeRGBValues();
-    
-    // 初始化时钟
-    updateClock();
-    setInterval(updateClock, 1000);
-    
-    // 初始化访客计数
-    initVisitorCount();
-    
-    // 加载模拟数据
-    loadMockData();
-    
-    // 初始化3D场景
-    init3DScene();
-    
-    // 初始化GitHub数据（模拟）
-    initGitHubData();
+    try {
+        // 获取DOM元素
+        getDOMElements();
+        
+        // 设置RGB颜色变量
+        setThemeRGBValues();
+        
+        // 初始化时钟
+        updateClock();
+        setInterval(updateClock, 1000);
+        
+        // 初始化访客计数
+        initVisitorCount();
+        
+        // 加载模拟数据
+        loadMockData();
+        
+        // 初始化3D场景
+        init3DScene();
+        
+        // 初始化GitHub数据（模拟）
+        initGitHubData();
+    } catch (error) {
+        console.error('初始化过程中发生错误:', error);
+        // 确保即使出错也更新终端
+        setTimeout(() => {
+            addTerminalLine('> 初始化过程中发生错误，使用模拟数据');
+            // 更新显示数据
+            if (repoCountElement) repoCountElement.textContent = '24';
+            if (totalStarsElement) totalStarsElement.textContent = '156';
+            if (followersElement) followersElement.textContent = '42';
+            if (contributionsElement) contributionsElement.textContent = '1,248';
+            // 隐藏加载屏幕
+            hideLoadingScreen();
+        }, 1500);
+    }
     
     // 初始化主题切换
     initThemeSwitcher();
-    
-    // 隐藏加载屏幕
-    setTimeout(() => {
-        loadingScreen.style.opacity = '0';
-        setTimeout(() => {
-            loadingScreen.style.display = 'none';
-            addTerminalLine("> 全息控制台已就绪");
-            addTerminalLine("> 输入 'help' 查看可用命令");
-        }, 1000);
-    }, 2000);
 }
 
 // 设置RGB颜色值
@@ -255,6 +278,15 @@ function generateActivityGraph() {
 
 // 添加终端行
 function addTerminalLine(text) {
+    // 确保terminalOutput存在
+    if (!terminalOutput) {
+        terminalOutput = document.getElementById('terminal-output');
+        if (!terminalOutput) {
+            console.warn('终端输出元素未找到');
+            return;
+        }
+    }
+    
     const line = document.createElement('div');
     line.className = 'terminal-line';
     line.textContent = text;
@@ -284,7 +316,30 @@ function init3DScene() {
 function initGitHubData() {
     // 这个函数在github-data.js中定义
     if (typeof loadGitHubData === 'function') {
-        loadGitHubData();
+        // 添加超时处理，确保加载界面总会消失
+        const githubTimeout = setTimeout(() => {
+            console.warn('GitHub数据加载超时，使用模拟数据');
+            if (window.addTerminalLine) {
+                window.addTerminalLine('> GitHub数据加载超时，使用模拟数据');
+            }
+            // 更新UI显示模拟数据
+            repoCountElement.textContent = '24';
+            totalStarsElement.textContent = '156';
+            followersElement.textContent = '42';
+            contributionsElement.textContent = '1,248';
+            
+            // 隐藏加载屏幕
+            hideLoadingScreen();
+        }, 5000); // 5秒后超时
+        
+        loadGitHubData().then(() => {
+            clearTimeout(githubTimeout);
+            hideLoadingScreen();
+        }).catch(error => {
+            console.error('加载GitHub数据时发生错误:', error);
+            clearTimeout(githubTimeout);
+            hideLoadingScreen();
+        });
     } else {
         // 使用模拟数据作为后备
         setTimeout(() => {
@@ -293,7 +348,27 @@ function initGitHubData() {
             followersElement.textContent = '42';
             contributionsElement.textContent = '1,248';
             addTerminalLine('> GitHub数据加载完成 (模拟数据)');
+            hideLoadingScreen();
         }, 1500);
+    }
+}
+
+// 隐藏加载屏幕
+function hideLoadingScreen() {
+    // 确保loadingScreen存在
+    if (!loadingScreen) {
+        loadingScreen = document.getElementById('loading-screen');
+    }
+    
+    if (loadingScreen) {
+        loadingScreen.style.opacity = '0';
+        setTimeout(() => {
+            loadingScreen.style.display = 'none';
+            addTerminalLine("> 全息控制台已就绪");
+            addTerminalLine("> 输入 'help' 查看可用命令");
+        }, 1000);
+    } else {
+        console.warn('加载屏幕元素未找到');
     }
 }
 
@@ -307,6 +382,32 @@ function initThemeSwitcher() {
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', init);
+
+// 最终安全保障：确保加载屏幕在10秒后一定被隐藏
+setTimeout(() => {
+    console.log('触发最终安全保障机制');
+    if (typeof hideLoadingScreen === 'function') {
+        hideLoadingScreen();
+    } else {
+        // 直接通过DOM操作隐藏加载屏幕
+        const loadingScreenEl = document.getElementById('loading-screen');
+        if (loadingScreenEl) {
+            loadingScreenEl.style.opacity = '0';
+            setTimeout(() => {
+                loadingScreenEl.style.display = 'none';
+            }, 1000);
+        }
+        
+        // 添加终端消息
+        const terminalOutputEl = document.getElementById('terminal-output');
+        if (terminalOutputEl) {
+            const line = document.createElement('div');
+            line.className = 'terminal-line';
+            line.textContent = '> 紧急模式：全息控制台已就绪';
+            terminalOutputEl.appendChild(line);
+        }
+    }
+}, 10000);
 
 // 导出到全局作用域
 window.addTerminalLine = addTerminalLine;
