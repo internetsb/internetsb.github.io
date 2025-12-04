@@ -1053,7 +1053,7 @@ function createAboutOverlay() {
             <div class="about-body">
                 <p>Hi, 我是<span class="about-highlight">internetsb</span>。</p>
                 <p>不正经的CSer,AI编程重度依赖者</p>
-                <p>这个星系里的不同星球，都是我的小网站和联系方式。背景的星空代表我的star数</p>
+                <p>这个星系里的不同星球，都是我的小网站和联系方式。背景的星空与star数有关</p>
             </div>
         </div>
     `;
