@@ -1051,6 +1051,15 @@ body {
         bottom: 20px;
         right: 20px;
     }
+    
+    /* 隐藏星球相关的标签和提示 */
+    .planet-label-container {
+        display: none !important;
+    }
+    
+    .planet-tooltip {
+        display: none !important;
+    }
 }
 
 @media (max-width: 768px) {
