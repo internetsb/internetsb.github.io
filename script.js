@@ -415,7 +415,6 @@ function hideLoadingScreen() {
         setTimeout(() => {
             loadingScreen.style.display = 'none';
             addTerminalLine("> 全息控制台已就绪");
-            addTerminalLine("> 输入 'help' 查看可用命令");
         }, 1000);
     } else {
         console.warn('加载屏幕元素未找到');
